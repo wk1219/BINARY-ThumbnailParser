@@ -2,6 +2,7 @@
 import os
 import sys
 from internal import common
+#from internal import IMAGEParser
 
 class ThumbnailParser:
     def __init__(self):
@@ -32,11 +33,12 @@ class ThumbnailParser:
             print("Not file")
             return None
         
-        if common.CheckSignature(_path, "thumbnail") == True:
+        if common.CheckSignature(_path, "thumb") == True:
             osv = "win"
-        elif common.CheckSignature(_path, "") == True or\
-            common.CheckSignature(_path, "") == True:
+        elif common.CheckSignature(_path, "thumb-linux") == True:
             osv = "linux"
+        elif common.CheckSignature(_path, "thumb-mac") == True:
+            osv = "mac"
         else:
             return None
         
@@ -47,22 +49,172 @@ class ThumbnailParser:
         # else, False
         return self.parser.GetData(_path)
     
+
+
     def PrintData(self, _dictData):
         self.parser.PrintData(_dictData)
+
+
+    
+    def SaveImage(self, _path):
+        return self.parser.GetImage(_path)
         
 '''
 Windows
 '''
 class ThumbnailParser_WIN:
-    def GetData(self, _path):        
+    def __init__(self):        
+        self.db_version = {"WIN_VISTA" : 0x14,
+                        "WIN_7" : 0x15,
+                        "WIN_8" : 0x1A,
+                        "WIN_8v2" : 0x1C,
+                        "WIN_8v3" : 0x1E,
+                        "WIN_8_1" : 0x1F,
+                        "WIN_10" : 0x20}
+    
+    def GetData(self, _path):                
+        file = open(_path, "rb")
+      
+        # signature : CMMM
+        # db_version : 0x15 ~ 0x20
+        # type : Windows Vista & 7: 00 = 32, 01 = 96, 02 = 256, 03 = 1024, 04 = sr
+        #        Windows 8: 00 = 16, 01 = 32, 02 = 48, 03 = 96, 04 = 256, 05 = 1024, 06 = sr, 07 = wide, 08 = exif
+		#        Windows 8.1: 00 = 16, 01 = 32, 02 = 48, 03 = 96, 04 = 256, 05 = 1024, 06 = 1600, 07 = sr, 08 = wide, 09 = exif, 0A = wide_alternate
+		#        Windows 10: 00 = 16, 01 = 32, 02 = 48, 03 = 96, 04 = 256, 05 = 768, 06 = 1280, 07 = 1920, 08 = 2560, 09 = sr, 0A = wide, 0B = exif, 0C = wide_alternate, 0D = custom_stream        
+        db_header = {"signature" : None,
+                    "version" : None,
+                    "type" : None}
+
+        cache_entry_info = {"firstEntry" : None,        # vista, 7, 8, 8v2, 8v3, 8_1, 10
+                            "availableEntry" : None,    # vista, 7, 8, 8v2, 8v3, 8_1, 10
+                            "numOfEntries" : None}      # vista, 7, 8, 8v2
+
+        cache_entry = {"signature" : None,      # vista, 7, 8, 8v2, 8v3, 8_1, 10
+                    "entrySize" : None,         # vista, 7, 8, 8v2, 8v3, 8_1, 10
+                    "entryHash" : None,         # vista, 7, 8, 8v2, 8v3, 8_1, 10
+                    "extension" : None,         # vista
+                    "nameLength" : None,        # vista, 7, 8, 8v2, 8v3, 8_1, 10
+                    "paddingSize" : None,       # vista, 7, 8, 8v2, 8v3, 8_1, 10
+                    "dataSize" : None,          # vista, 7, 8, 8v2, 8v3, 8_1, 10
+                    "width" : None,             # 8
+                    "height" : None,            # 8
+                    "dataChecksum" : None,      # vista, 7, 8, 8v2, 8v3, 8_1, 10
+                    "headerChecksum" : None}    # vista, 7, 8, 8v2, 8v3, 8_1, 10
         
+        # db header check        
+        db_header.update({"signature" : common.GetToEndian(file.read(4), 4, False, 's')})
+        db_header.update({"version" : int(common.GetToEndian(file.read(4), 4, True, 'd'), 10)})
+        db_header.update({"type" : int(common.GetToEndian(file.read(4), 4, True, 'd'), 10)})
+        if None in db_header.values():
+            return None
+        elif db_header.get("signature") != "CMMM":
+            return None
+
+        # cache entry info check
+        try:
+            ver =  db_header.get("version")
+            if ver == self.db_version.get("WIN_VISTA") or \
+                ver == self.db_version.get("WIN_7") or \
+                ver == self.db_version.get("WIN_8"):
+                cache_entry_info.update({"firstEntry" : int(common.GetToEndian(file.read(4), 4, True, 'd'), 10)})
+                cache_entry_info.update({"availableEntry" : int(common.GetToEndian(file.read(4), 4, True, 'd'), 10)})
+                cache_entry_info.update({"numOfEntries" : int(common.GetToEndian(file.read(4), 4, True, 'd'), 10)})
+
+            elif ver == self.db_version.get("WIN_8v2"):
+                file.seek(4, 1) # unknown 4 bytes pass
+                cache_entry_info.update({"firstEntry" : int(common.GetToEndian(file.read(4), 4, True, 'd'), 10)})
+                cache_entry_info.update({"availableEntry" : int(common.GetToEndian(file.read(4), 4, True, 'd'), 10)})
+                cache_entry_info.update({"numOfEntries" : int(common.GetToEndian(file.read(4), 4, True, 'd'), 10)})
+
+            elif ver == self.db_version.get("WIN_8v3") or \
+                ver == self.db_version.get("WIN_8_1") or \
+                ver == self.db_version.get("WIN_10"):
+                file.seek(4, 1) # unknown 4 bytes pass
+                cache_entry_info.update({"firstEntry" : int(common.GetToEndian(file.read(4), 4, True, 'd'), 10)})
+                cache_entry_info.update({"availableEntry" : int(common.GetToEndian(file.read(4), 4, True, 'd'), 10)})
+
+            else:
+                return None
+        except:
+            return None
+
+        if list(cache_entry_info.values()).count(None) >= 2 or \
+            cache_entry_info.get("firstEntry") == None:
+            return None
+        
+        # each cache entry extraction
+        if ver == self.db_version.get("WIN_8v2"):
+            startOffset = file.seek(28)
+        else:
+            startOffset = file.seek(24)
+
+        while True:
+            if ver == self.db_version.get("WIN_VISTA"):
+                cache_entry.update({"signature" : common.GetToEndian(file.read(4), 4, False, 's')})
+                cache_entry.update({"entrySize" : int(common.GetToEndian(file.read(4), 4, True, 'd'), 10)})
+                cache_entry.update({"entryHash" : common.GetToEndian(file.read(8), 8, True, 's')})
+                cache_entry.update({"extension" : common.GetToEndian(file.read(8), 8, False, 'uni')}) # unicode
+                cache_entry.update({"nameLength" : int(common.GetToEndian(file.read(4), 4, True, 'd'), 10)})
+                cache_entry.update({"paddingSize" : int(common.GetToEndian(file.read(4), 4, True, 'd'), 10)})
+                cache_entry.update({"dataSize" : int(common.GetToEndian(file.read(4), 4, True, 'd'), 10)})
+                file.seek(4,1) # unknown 4 bytes pass
+                cache_entry.update({"dataChecksum" : common.GetToEndian(file.read(8), 8, True, 'x')})
+                cache_entry.update({"headerChecksum" : common.GetToEndian(file.read(8), 8, True, 'x')})
+
+            elif ver == self.db_version.get("WIN_7"):
+                cache_entry.update({"signature" : common.GetToEndian(file.read(4), 4, False, 's')})
+                cache_entry.update({"entrySize" : int(common.GetToEndian(file.read(4), 4, True, 'd'), 10)})
+                cache_entry.update({"entryHash" : common.GetToEndian(file.read(8), 8, True, 's')})
+                cache_entry.update({"nameLength" : int(common.GetToEndian(file.read(4), 4, True, 'd'), 10)})
+                cache_entry.update({"paddingSize" : int(common.GetToEndian(file.read(4), 4, True, 'd'), 10)})
+                cache_entry.update({"dataSize" : int(common.GetToEndian(file.read(4), 4, True, 'd'), 10)})
+                file.seek(4,1) # unknown 4 bytes pass
+                cache_entry.update({"dataChecksum" : common.GetToEndian(file.read(8), 8, True, 'x')})
+                cache_entry.update({"headerChecksum" : common.GetToEndian(file.read(8), 8, True, 'x')})
+
+            elif ver == self.db_version.get("WIN_8") or \
+                ver == self.db_version.get("WIN_8v2") or \
+                ver == self.db_version.get("WIN_8v3") or \
+                ver == self.db_version.get("WIN_8_1") or \
+                ver == self.db_version.get("WIN_10"):
+                cache_entry.update({"signature" : common.GetToEndian(file.read(4), 4, False, 's')})
+                cache_entry.update({"entrySize" : int(common.GetToEndian(file.read(4), 4, True, 'd'), 10)})
+                cache_entry.update({"entryHash" : common.GetToEndian(file.read(8), 8, False, 'x')})
+                cache_entry.update({"nameLength" : int(common.GetToEndian(file.read(4), 4, True, 'd'), 10)})
+                cache_entry.update({"paddingSize" : int(common.GetToEndian(file.read(4), 4, True, 'd'), 10)})
+                cache_entry.update({"dataSize" : int(common.GetToEndian(file.read(4), 4, True, 'd'), 10)})
+                cache_entry.update({"width" : int(common.GetToEndian(file.read(4), 4, True, 'd'), 10)})
+                cache_entry.update({"height" : int(common.GetToEndian(file.read(4), 4, True, 'd'), 10)})
+                file.seek(4,1) # unknown 4 bytes pass
+                cache_entry.update({"dataChecksum" : common.GetToEndian(file.read(8), 8, True, 'x')})
+                cache_entry.update({"headerChecksum" : common.GetToEndian(file.read(8), 8, True, 'x')})
+                
+            else:
+                break
+            
+            if cache_entry.get("signature") != "CMMM":
+                startOffset = common.FindSignatureInFile(_path, startOffset, 32768, b'CMMM')
+                if startOffset != -1:
+                    file.seek(startOffset)
+                    continue
+                else:
+                    break
+
+        file.close()
         return dictData.copy()
     
+
+
     def PrintData(self, _dictData):
         if type(_dictData) is not dict:
             return False
     
 
+
+    # _path
+    #   thumbnail image file path
+    def SaveImage(self, _path):
+        pass
 
 '''
 macOS
@@ -95,7 +247,7 @@ def PrintHelp():
 '''how to use this program with parameters
 params
     -o, --output
-        file path to saving result
+        (not supported) file path to saving result
 
     -p, --path
         thumbnail file path(including file)

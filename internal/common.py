@@ -57,6 +57,8 @@ def CheckPlatform():
 def CheckSignature(_path, _extension):
     if os.path.isfile(_path) == True:
         size = os.path.getsize(_path)
+    else:
+        return False
     
     file = open(_path, "rb")
 
@@ -178,3 +180,71 @@ def ConvertFiletimeToDatetime(ft):
     HUNDREDS_OF_NANOSECONDS = 10000000
 
     return datetime.datetime.utcfromtimestamp((ft - EPOCH_AS_FILETIME) / HUNDREDS_OF_NANOSECONDS)
+
+
+
+'''
+_path
+    file path
+
+_startOffset
+    offset
+
+_sizeOfChunk
+    chunk size
+
+_signature
+    bytes
+
+return
+    offset of signature in file.
+'''
+def FindSignatureInFile(_path, _startOffset = 0, _sizeOfChunk = 32768, _signature = b''):
+    if os.path.isfile(_path) == False:
+        return -1
+    
+    size = size = os.path.getsize(_path)
+    if size < _startOffset:
+        return -1
+    else:
+        startOffset = _startOffset
+    
+    if size < _sizeOfChunk:
+        return -1
+    elif _sizeOfChunk == 0:
+        chunkSize = 32768
+    else:
+        chunkSize = _sizeOfChunk
+
+    if _signature == b'':
+        return -1
+    else:
+        sig = _signature
+
+    file = open(_path, "rb")
+    currentOffset = startOffset
+    while True:
+        file.seek(currentOffset)
+        buf = file.read(chunkSize)
+
+        currentOffset = 0
+        size = len(buf)
+        if size <= 4:
+            currentOffset = -1
+            break
+    
+        while True:
+            size -= 1
+            if( size > 4 ) and buf[currentOffset:currentOffset+len(sig)] != sig:
+                currentOffset += 1
+            else:
+                break
+        
+        if size < 4:
+            continue
+        else:
+            currentOffset += startOffset
+            break
+    
+    file.close()
+    return currentOffset
