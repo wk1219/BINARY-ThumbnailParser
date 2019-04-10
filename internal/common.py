@@ -55,35 +55,46 @@ def CheckPlatform():
     return os
 
 def CheckSignature(_path, _extension):
-    if os.path.isfile(_path) == True:
+    if (type(_path) == str) and (os.path.isfile(_path) == True):
         size = os.path.getsize(_path)
+        file = open(_path, "rb")
+        if size > 40:
+            file.seek(0)
+            fileHeader = file.read(20)
+
+            file.seek(-20, 2)
+            fileFooter = file.read(20)
+        elif 10 < size <= 40:
+            file.seek(0)
+            fileHeader = file.read(5)
+
+            file.seek(-5, 2)
+            fileFooter = file.read(5)
+        elif 4 < size <= 10:
+            file.seek(0)
+            fileHeader = file.read(4)
+
+            file.seek(-4, 2)
+            fileFooter = file.read(4)
+        else:
+            fileHeader = None
+
+        file.close()
+    elif (type(_path) == bytes) or (type(_path) == bytearray):
+        size = len(_path)
+        if size > 40:
+            fileHeader = _path[:20]
+            fileFooter = _path[-20:]
+        elif 10 < size <= 40:
+            fileHeader = _path[:5]
+            fileFooter = _path[-5:]
+        elif 4 < size <= 10:
+            fileHeader = _path[:4]
+            fileFooter = _path[-4:]
+        else:
+            fileHeader = None
     else:
         return False
-    
-    file = open(_path, "rb")
-
-    if size > 40:
-        file.seek(0)
-        fileHeader = file.read(20)
-
-        file.seek(-20, 2)
-        fileFooter = file.read(20)
-    elif 10 < size <= 40:
-        file.seek(0)
-        fileHeader = file.read(5)
-
-        file.seek(-5, 2)
-        fileFooter = file.read(5)
-    elif 4 < size <= 10:
-        file.seek(0)
-        fileHeader = file.read(4)
-
-        file.seek(-4, 2)
-        fileFooter = file.read(4)
-    else:
-        fileHeader = None
-
-    file.close()
     
     if fileHeader == None:
         return False
@@ -113,6 +124,9 @@ def CheckSignature(_path, _extension):
         "footer" : None},
         {"ext" : "png",
         "header" : [b"\x89\x50\x4E\x47\x0D\x0A\x1A\x0A"],
+        "footer" : None},
+        {"ext" : "bmp",
+        "header" : [b"\x42\x4D"],
         "footer" : None}
     ]
 
@@ -234,8 +248,8 @@ def FindSignatureInFile(_path, _startOffset = 0, _sizeOfChunk = 32768, _signatur
             break
     
         while True:
-            size -= 1
             if( size > 4 ) and buf[currentOffset:currentOffset+len(sig)] != sig:
+                size -= 1
                 currentOffset += 1
             else:
                 break
