@@ -273,7 +273,7 @@ class ThumbnailParser_WIN:
             print("=" * (50 - (len(str(i+1)))))
 
             print("File Name\t: %s" % _dictData.get(i+1).get("fileName"))
-            print("FIle Size\t: %s" % _dictData.get(i+1).get("size"))
+            print("File Size\t: %s" % _dictData.get(i+1).get("size"))
             print("Dimension\t: %s" % _dictData.get(i+1).get("dimension"))
             print("Entry Hash\t: %s" % _dictData.get(i+1).get("entryHash"))
             print("")
@@ -367,7 +367,7 @@ params
         thumbnail file path(including file)
 
     -v, --verbose
-        save thumbnail image file in running process directory
+        (not supported) save thumbnail image file in running process directory
 
     -h, --help\n'''
     print(body)
@@ -405,7 +405,7 @@ if __name__ == "__main__":
         if p != None:
             data = p.GetData(path)
             if data != None:
-                print("input file(or path) : " + path)
+                print("input file(or path) : " + os.path.abspath(path))
                 print("")
                 p.PrintData(data)
                 sys.exit(0)
